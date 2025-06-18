@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard Inventaris Rak</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    input, button { margin: 5px 0; padding: 5px; }
+    .form-section { border: 1px solid #ccc; padding: 15px; margin-top: 20px; }
+    #searchResult div { margin-bottom: 15px; }
+  </style>
+</head>
+<body>
+  <h1>Dashboard Inventaris Rak</h1>
+
+  <h3>Pencarian Barang</h3>
+  <input type="text" id="searchInput" placeholder="Cari nama barang...">
+  <button onclick="searchBarang()">Cari</button>
+  <div id="searchResult"></div>
+
+  <hr>
+
+  <h3>Simulasi Scan UID</h3>
+  <input type="text" id="uidSimulasi" placeholder="Tempelkan UID RFID">
+  <button onclick="simulateScan()">Scan</button>
+
+  <div id="formMasuk" class="form-section" style="display:none;">
+    <h2>Form Barang Masuk</h2>
+    <label>UID RFID:</label><br>
+    <input type="text" id="uidMasuk" readonly><br>
+    <label>Nama Barang:</label><br>
+    <input type="text" id="namaMasuk"><br>
+    <label>Qty:</label><br>
+    <input type="number" id="qtyMasuk"><br>
+    <label>Lokasi (contoh A1):</label><br>
+    <input type="text" id="lokasiMasuk"><br>
+    <button onclick="kirimMasuk()">Simpan Barang Masuk</button>
+  </div>
+
+  <div id="formKeluar" class="form-section" style="display:none;">
+    <h2>Form Barang Keluar</h2>
+    <label>UID RFID:</label><br>
+    <input type="text" id="uidKeluar" readonly><br>
+    <label>Nama Barang:</label><br>
+    <input type="text" id="namaKeluar" readonly><br>
+    <label>Stok Tersedia:</label><br>
+    <input type="number" id="stokTersedia" readonly><br>
+    <label>Qty Keluar:</label><br>
+    <input type="number" id="qtyKeluar"><br>
+    <button onclick="kirimKeluar()">Simpan Barang Keluar</button>
+  </div>
+
+  <script>
+    const scriptURL = "https://script.google.com/macros/s/AKfycby3xaTjHdkqC5Tncjh9YTp0tYGLHKLdfD1KKqTXC7uI6YddbqNB-BwKbpPi6Yo_Mm9i/exec";
+
+    async function searchBarang() {
+      const query = document.getElementById("searchInput").value;
+      const res = await fetch(`${scriptURL}?action=search&query=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      const container = document.getElementById("searchResult");
+      container.innerHTML = '';
+
+      if (data.length === 0) {
+        container.innerHTML = '<p>Barang tidak ditemukan.</p>';
+        return;
+      }
+
+      data.forEach(item => {
+        const el = document.createElement("div");
+        el.innerHTML = `<strong>${item.nama}</strong> - Total Qty: ${item.total} <br>
+          ${item.rinci.map(r =>
+            `Lokasi ${r.lokasi}: ${r.qty} <button onclick="tunjukLED('${r.lokasi}')">Tunjukkan</button>`
+          ).join('<br>')}<hr>`;
+        container.appendChild(el);
+      });
+    }
+
+    async function tunjukLED(lokasi) {
+      await fetch(`${scriptURL}?action=tunjuk&lokasi=${lokasi}`);
+      alert("LED dinyalakan untuk lokasi " + lokasi);
+    }
+
+    async function handleScan(uid) {
+      const res = await fetch(`${scriptURL}?rfid=${uid}`);
+      const data = await res.json();
+
+      if (data.status === "baru") {
+        document.getElementById("formMasuk").style.display = "block";
+        document.getElementById("formKeluar").style.display = "none";
+        document.getElementById("uidMasuk").value = uid;
+      } else if (data.status === "lama") {
+        document.getElementById("formMasuk").style.display = "none";
+        document.getElementById("formKeluar").style.display = "block";
+        document.getElementById("uidKeluar").value = uid;
+        document.getElementById("namaKeluar").value = data.nama;
+        document.getElementById("stokTersedia").value = data.qty;
+      }
+    }
+
+    async function kirimMasuk() {
+      const body = new URLSearchParams({
+        action: 'masuk',
+        rfid: document.getElementById("uidMasuk").value,
+        nama: document.getElementById("namaMasuk").value,
+        qty: document.getElementById("qtyMasuk").value,
+        lokasi: document.getElementById("lokasiMasuk").value
+      });
+      await fetch(scriptURL, { method: "POST", body });
+      alert("Barang masuk berhasil disimpan");
+      location.reload();
+    }
+
+    async function kirimKeluar() {
+      const body = new URLSearchParams({
+        action: 'keluar',
+        rfid: document.getElementById("uidKeluar").value,
+        qty: document.getElementById("qtyKeluar").value
+      });
+      await fetch(scriptURL, { method: "POST", body });
+      alert("Barang keluar berhasil disimpan");
+      location.reload();
+    }
+
+    function simulateScan() {
+      const uid = document.getElementById("uidSimulasi").value;
+      if (uid) handleScan(uid);
+    }
+  </script>
+</body>
+</html>
